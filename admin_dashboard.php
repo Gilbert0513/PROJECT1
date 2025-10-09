@@ -1,56 +1,65 @@
 <?php
+// admin_dashboard.php
 session_start();
-if(!isset($_SESSION['user_id']) || $_SESSION['user_role']!=='admin') header('Location:index.php');
+require_once 'db.php';
+if (empty($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
+    header('Location: index.php'); exit;
+}
+$foods = [];
+$res = $conn->query("SELECT * FROM food_items ORDER BY id DESC");
+while($r = $res->fetch_assoc()) $foods[] = $r;
 ?>
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-    <title>Admin Dashboard</title>
-    <link rel="stylesheet" href="css/style.css">
+  <meta charset="utf-8">
+  <title>Admin - Foodhouse</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<header>Admin Dashboard - Foodhouse</header>
 <nav>
-    <a href="admin_dashboard.php">Inventory</a>
-    <a href="admin_dashboard.php#users">Users</a>
-    <a href="logout.php">Logout</a>
+  <h1>🍖 Foodhouse Grillhouse - Admin</h1>
+  <div>
+    <a href="index.php">Front</a>
+    <a href="auth.php?action=logout">Logout</a>
+  </div>
 </nav>
+
 <div class="container">
-    <h2>Inventory</h2>
-    <form id="addInventoryForm">
-        <input type="text" id="inv_name" placeholder="Item Name" required>
-        <input type="text" id="inv_sku" placeholder="SKU">
-        <input type="number" id="inv_qty" placeholder="Quantity" required>
-        <input type="number" step="0.01" id="inv_price" placeholder="Price" required>
-        <input type="text" id="inv_unit" placeholder="Unit" value="pcs">
+  <div class="dashboard">
+    <div class="card">
+      <h3>Inventory</h3>
+      <table>
+        <thead><tr><th>ID</th><th>Name</th><th>Price</th><th>Stock</th></tr></thead>
+        <tbody>
+          <?php foreach($foods as $f): ?>
+          <tr>
+            <td><?=$f['id']?></td>
+            <td><?=htmlspecialchars($f['name'])?></td>
+            <td>₱<?=number_format($f['price'],2)?></td>
+            <td><?=$f['stock']?></td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Add Food Item</h3>
+      <form id="addFoodForm">
+        <input id="food_name" placeholder="Name" required>
+        <input id="food_price" type="number" step="0.01" placeholder="Price" required>
+        <input id="food_stock" type="number" placeholder="Stock" required>
+        <textarea id="food_desc" placeholder="Description"></textarea>
         <button type="submit">Add Item</button>
-    </form>
-    <table id="inventory_table"><thead><tr><th>ID</th><th>Name</th><th>Qty</th><th>Price</th></tr></thead><tbody></tbody></table>
+      </form>
+    </div>
+  </div>
 </div>
+
+<footer>© <?=date('Y')?> Foodhouse</footer>
 <script src="js/main.js"></script>
-<script>
-async function loadInventory(){
-    const res = await fetch('api.php?action=list_inventory').then(r=>r.json());
-    if(res.success){
-        const tbody = document.querySelector('#inventory_table tbody'); tbody.innerHTML='';
-        res.data.forEach(i=>{
-            tbody.innerHTML += `<tr><td>${i.id}</td><td>${i.name}</td><td>${i.qty}</td><td>${i.price}</td></tr>`;
-        });
-    }
-}
-document.getElementById('addInventoryForm').onsubmit = async e=>{
-    e.preventDefault();
-    const data = {
-        name: document.getElementById('inv_name').value,
-        sku: document.getElementById('inv_sku').value,
-        qty: parseInt(document.getElementById('inv_qty').value),
-        price: parseFloat(document.getElementById('inv_price').value),
-        unit: document.getElementById('inv_unit').value
-    };
-    const res = await fetch('api.php?action=add_inventory',{method:'POST',body:JSON.stringify(data),headers:{'Content-Type':'application/json'}});
-    if(res.ok) { alert('Item added'); loadInventory(); }
-}
-loadInventory();
-</script>
 </body>
 </html>

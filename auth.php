@@ -1,57 +1,89 @@
 <?php
+session_start();
 require_once 'db.php';
 header('Content-Type: application/json');
 
 $action = $_GET['action'] ?? '';
+$input = json_decode(file_get_contents('php://input'), true);
 
-try {
-    if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $data = json_decode(file_get_contents('php://input'), true);
-        $username = trim($data['username']);
-        $password = $data['password'];
-        $full_name = $data['full_name'];
-        $role = $data['role'] ?? 'customer';
+// REGISTER
+if ($action === 'register') {
+    $full_name = trim($input['full_name'] ?? '');
+    $username = trim($input['username'] ?? '');
+    $password = trim($input['password'] ?? '');
+    $role = $input['role'] ?? 'customer';
 
-        $pwHash = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = $pdo->prepare('INSERT INTO users (username,password,full_name,role) VALUES (:u,:p,:f,:r)');
-        $stmt->execute([':u'=>$username, ':p'=>$pwHash, ':f'=>$full_name, ':r'=>$role]);
-        echo json_encode(['success'=>true]);
+    if (!$full_name || !$username || !$password) {
+        echo json_encode(['success' => false, 'message' => 'Please fill in all fields.']);
         exit;
     }
 
-    if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $data = json_decode(file_get_contents('php://input'), true);
-        $username = $data['username'];
-        $password = $data['password'];
+    // check existing username
+    $check = $conn->prepare("SELECT id FROM users WHERE username = ?");
+    $check->bind_param('s', $username);
+    $check->execute();
+    $check->store_result();
 
-        $stmt = $pdo->prepare('SELECT * FROM users WHERE username = :u');
-        $stmt->execute([':u'=>$username]);
-        $user = $stmt->fetch();
-
-        if (!$user || !password_verify($password, $user['password'])) {
-            http_response_code(401);
-            echo json_encode(['success'=>false,'message'=>'Invalid credentials']);
-            exit;
-        }
-
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['username'] = $user['username'];
-        $_SESSION['user_role'] = $user['role'];
-        echo json_encode(['success'=>true,'role'=>$user['role']]);
+    if ($check->num_rows > 0) {
+        echo json_encode(['success' => false, 'message' => 'Username already exists.']);
         exit;
     }
 
-    if ($action === 'logout') {
-        session_unset();
-        session_destroy();
-        echo json_encode(['success'=>true]);
-        exit;
+    $hashed = password_hash($password, PASSWORD_DEFAULT);
+    $stmt = $conn->prepare("INSERT INTO users (full_name, username, password, role) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param('ssss', $full_name, $username, $hashed, $role);
+
+    if ($stmt->execute()) {
+        echo json_encode(['success' => true, 'message' => 'Account created successfully.']);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Database insert failed.']);
     }
-
-    echo json_encode(['success'=>false,'message'=>'Unknown action']);
-
-} catch (Exception $e) {
-    http_response_code(400);
-    echo json_encode(['success'=>false,'message'=>$e->getMessage()]);
+    exit;
 }
-?>
+
+// LOGIN
+if ($action === 'login') {
+    $username = trim($input['username'] ?? '');
+    $password = trim($input['password'] ?? '');
+
+    if (!$username || !$password) {
+        echo json_encode(['success' => false, 'message' => 'Please enter username and password.']);
+        exit;
+    }
+
+    $stmt = $conn->prepare("SELECT id, full_name, password, role FROM users WHERE username = ?");
+    $stmt->bind_param('s', $username);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($row = $result->fetch_assoc()) {
+        if (password_verify($password, $row['password'])) {
+            $_SESSION['user'] = [
+                'id' => $row['id'],
+                'full_name' => $row['full_name'],
+                'role' => $row['role'],
+                'username' => $username
+            ];
+            echo json_encode([
+                'success' => true,
+                'role' => $row['role'],
+                'full_name' => $row['full_name']
+            ]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid password.']);
+        }
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Username not found.']);
+    }
+    exit;
+}
+
+// LOGOUT
+if ($action === 'logout') {
+    session_unset();
+    session_destroy();
+    header('Location: index.php');
+    exit;
+}
+
+echo json_encode(['success' => false, 'message' => 'Invalid action.']);

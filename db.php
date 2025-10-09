@@ -1,21 +1,13 @@
 <?php
-session_start();
-
-$host = '127.0.0.1';
-$db   = 'foodhouse';
+// db.php — handles database connection only
+$host = 'localhost';
 $user = 'root';
-$pass = '';
-$charset = 'utf8mb4';
+$pass = ''; // default password in XAMPP
+$dbname = 'foodhouse';
 
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-$options = [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-];
-
-try {
-    $pdo = new PDO($dsn, $user, $pass, $options);
-} catch (PDOException $e) {
-    die('DB Connection failed: ' . $e->getMessage());
+$conn = new mysqli($host, $user, $pass, $dbname);
+if ($conn->connect_error) {
+    die('Database connection failed: ' . $conn->connect_error);
 }
+$conn->set_charset('utf8mb4');
 ?>

@@ -1,50 +1,244 @@
+/* ==============================
+   FOODHOUSE MINIMALIST THEME
+   ============================== */
+* {
+  box-sizing: border-box;
+  font-family: 'Poppins', sans-serif;
+}
+
 body {
-    font-family: Arial, sans-serif;
-    background: #f5f5f5;
-    margin: 0;
-    padding: 0;
+  background: #f7f3ee;
+  color: #2b1d12;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
-header {
-    background: #ff9800;
-    color: #fff;
-    padding: 15px;
-    text-align: center;
-}
+
 nav {
-    background: #333;
-    overflow: hidden;
+  background: #3e2a1c;
+  color: #fff;
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
-nav a {
-    float: left;
-    color: #f5f5f5;
-    padding: 14px 20px;
-    text-decoration: none;
+
+nav h1 {
+  font-size: 1.2rem;
+  letter-spacing: 1px;
 }
-nav a:hover {
-    background: #575757;
+
+nav a, nav span {
+  color: #fff;
+  text-decoration: none;
+  margin-left: 1rem;
+  font-size: 0.95rem;
 }
+
 .container {
-    padding: 20px;
+  width: 100%;
+  max-width: 1000px;
+  margin: 2rem auto;
+  padding: 1rem;
 }
+
+.card {
+  background: #fff8f1;
+  padding: 1.5rem;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  border: 1px solid #efe6dd;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+input, textarea, select {
+  width: 100%;
+  padding: 0.65rem;
+  margin-top: 0.6rem;
+  border: 1px solid #ddd2c6;
+  border-radius: 8px;
+}
+
 button {
-    padding: 10px 20px;
-    background: #ff9800;
-    border: none;
-    color: #fff;
-    cursor: pointer;
+  margin-top: 0.8rem;
+  background: #b3501a;
+  color: #fff;
+  border: none;
+  padding: 0.75rem 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: 0.2s;
 }
-button:hover {
-    background: #e68900;
+
+button:hover { background: #8a3e14; }
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
 }
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px;
+
+.menu-item {
+  background: #fff;
+  border: 1px dashed #d9cfc4;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  transition: 0.2s;
 }
-table, th, td {
-    border: 1px solid #ccc;
+
+.menu-item:hover {
+  background: #fff5eb;
 }
-th, td {
-    padding: 10px;
-    text-align: left;
+
+.menu-item h3 {
+  color: #3e2a1c;
+  font-size: 1.05rem;
+  margin-bottom: 0.3rem;
+}
+
+.menu-item p {
+  font-size: 0.9rem;
+  color: #6b5a4b;
+  margin: 0.2rem 0;
+}
+
+.menu-item .price {
+  font-weight: bold;
+  color: #b3501a;
+}
+
+footer {
+  background: #3e2a1c;
+  color: #fff;
+  text-align: center;
+  padding: 0.8rem;
+  margin-top: auto;
+}
+
+.flex {
+  display: flex;
+  gap: 0.8rem;
+}
+
+/* ==============================
+   AUTH PAGE STYLES (Login/Register)
+   ============================== */
+
+.auth-body {
+  background: linear-gradient(145deg, #3e2a1c 35%, #f7f3ee 35%);
+  font-family: 'Poppins', sans-serif;
+  color: #2b1d12;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.auth-nav {
+  text-align: center;
+  color: #fff;
+  padding: 2rem 1rem 1rem;
+  font-size: 1.6rem;
+  letter-spacing: 1px;
+}
+
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 2rem;
+  padding: 2rem;
+}
+
+.auth-card {
+  background: #fff;
+  width: 340px;
+  border-radius: 14px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.12);
+  padding: 2rem;
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+
+.auth-card:hover {
+  transform: translateY(-5px);
+}
+
+.auth-card h2 {
+  color: #3e2a1c;
+  margin-bottom: 0.4rem;
+}
+
+.subtitle {
+  color: #6b5a4b;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.auth-card input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd2c6;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  margin-bottom: 0.7rem;
+}
+
+.auth-card button {
+  background: #b3501a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: 0.2s;
+}
+
+.auth-card button:hover {
+  background: #8a3e14;
+}
+
+.role-select {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.role-select label {
+  color: #3e2a1c;
+  font-weight: 500;
+}
+
+footer {
+  background: #3e2a1c;
+  color: #fff;
+  text-align: center;
+  padding: 0.8rem;
+  margin-top: auto;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 750px) {
+  .auth-container {
+    flex-direction: column;
+    align-items: center;
+  }
 }
