@@ -20,44 +20,51 @@ if ($action === 'place_order') {
     $conn->begin_transaction();
     try {
         $total = 0;
+        $order_items_to_insert = [];
+
         // compute total and check stock
         foreach ($items as $it) {
             $id = (int)$it['id']; $qty = (int)$it['qty'];
             if ($qty <= 0) continue;
+            
             $stmt = $conn->prepare("SELECT price, stock FROM food_items WHERE id = ?");
             $stmt->bind_param('i',$id);
             $stmt->execute();
             $res = $stmt->get_result();
             if (!$row = $res->fetch_assoc()) throw new Exception("Item not found");
-            if ($row['stock'] < $qty) throw new Exception("Not enough stock for item ID $id");
-            $total += $row['price'] * $qty;
+            
+            if ($row['stock'] < $qty) throw new Exception("Not enough stock for " . $row['name']);
+
+            $price = $row['price'];
+            $subtotal = $price * $qty;
+            $total += $subtotal;
+            
+            // Collect item details for batch insertion
+            $order_items_to_insert[] = [
+                'id' => $id, 
+                'qty' => $qty, 
+                'price' => $price
+            ];
+
             $stmt->close();
         }
 
-        // insert order
-        $stmt = $conn->prepare("INSERT INTO orders (customer_name, total, payment_type, order_type) VALUES (?,?,?,?)");
-        $stmt->bind_param('sdss', $customer_name, $total, $payment_type, $order_type);
+        // 1. Insert into orders table
+        $stmt = $conn->prepare("INSERT INTO orders (customer_name, total, order_type, payment_type) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param('sdss', $customer_name, $total, $order_type, $payment_type);
         $stmt->execute();
-        $order_id = $stmt->insert_id;
+        $order_id = $conn->insert_id;
         $stmt->close();
 
-        // insert order items & update stock
-        foreach ($items as $it) {
-            $id = (int)$it['id']; $qty = (int)$it['qty'];
-            if ($qty <= 0) continue;
-            // get price again
-            $stmt = $conn->prepare("SELECT price, stock FROM food_items WHERE id = ? FOR UPDATE");
-            $stmt->bind_param('i',$id);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            $row = $res->fetch_assoc();
-            $price = $row['price'];
-            $newStock = $row['stock'] - $qty;
-            if ($newStock < 0) throw new Exception("Stock error for item $id");
+        // 2. Update stock and insert order items
+        foreach ($order_items_to_insert as $item) {
+            $id = $item['id'];
+            $qty = $item['qty'];
+            $price = $item['price'];
 
-            // update stock
-            $u = $conn->prepare("UPDATE food_items SET stock = ? WHERE id = ?");
-            $u->bind_param('ii', $newStock, $id);
+            // update stock (Inventory Management)
+            $u = $conn->prepare("UPDATE food_items SET stock = stock - ? WHERE id = ?");
+            $u->bind_param('ii', $qty, $id);
             $u->execute();
             $u->close();
 
@@ -66,11 +73,12 @@ if ($action === 'place_order') {
             $oi->bind_param('iiid', $order_id, $id, $qty, $price);
             $oi->execute();
             $oi->close();
-            $stmt->close();
         }
 
         $conn->commit();
-        echo json_encode(['success'=>true,'order_id'=>$order_id]);
+        // --- MODIFICATION HERE: Return the final total ---
+        echo json_encode(['success'=>true,'order_id'=>$order_id, 'total' => $total]);
+        // --------------------------------------------------
     } catch (Exception $e) {
         $conn->rollback();
         echo json_encode(['success'=>false,'message'=>$e->getMessage()]);
@@ -87,12 +95,16 @@ if ($action === 'add_food') {
     $desc = trim($input['description'] ?? '');
     $price = floatval($input['price'] ?? 0);
     $stock = intval($input['stock'] ?? 0);
+    
     if (!$name) { echo json_encode(['success'=>false,'message'=>'Missing name']); exit; }
+
     $stmt = $conn->prepare("INSERT INTO food_items (name, description, price, stock) VALUES (?,?,?,?)");
     $stmt->bind_param('ssdi', $name, $desc, $price, $stock);
-    if ($stmt->execute()) echo json_encode(['success'=>true]);
-    else echo json_encode(['success'=>false,'message'=>'DB error']);
+
+    if ($stmt->execute()) {
+        echo json_encode(['success'=>true,'message'=>'Food item added.']);
+    } else {
+        echo json_encode(['success'=>false,'message'=>'Database insert failed.']);
+    }
     exit;
 }
-
-echo json_encode(['success'=>false,'message'=>'Unknown action']);
