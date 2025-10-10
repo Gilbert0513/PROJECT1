@@ -30,6 +30,69 @@ if (loginForm) {
   });
 }
 
+document.getElementById('cashierLoginForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        username: document.getElementById('cashier_username').value,
+        password: document.getElementById('cashier_password').value
+    };
+
+    fetch('auth.php?action=login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.user.role === 'cashier') {
+                window.location.href = 'cashier_dashboard.php';
+            } else {
+                alert('Access denied. Cashier accounts only.');
+            }
+        } else {
+            alert('Login failed: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Login failed');
+    });
+});
+
+// Cashier Registration
+document.getElementById('cashierRegisterForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        full_name: document.getElementById('cashier_reg_fullname').value,
+        username: document.getElementById('cashier_reg_username').value,
+        password: document.getElementById('cashier_reg_password').value,
+        registration_code: document.getElementById('cashier_reg_code').value,
+        role: 'cashier'
+    };
+
+    fetch('auth.php?action=register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Cashier account created successfully!');
+            showCashierLogin();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Registration failed');
+    });
+});
+
 // REGISTER
 const registerForm = document.getElementById('registerForm');
 if (registerForm) {
@@ -52,6 +115,76 @@ if (registerForm) {
     }
   });
 }
+
+// Enhanced fetch function with error handling
+async function apiCall(url, data) {
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            throw new Error(`Server returned HTML instead of JSON. Response: ${text.substring(0, 100)}`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('API Call Error:', error);
+        throw error;
+    }
+}
+
+// Updated login function
+document.getElementById('loginForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value
+    };
+
+    try {
+        const data = await apiCall('auth.php?action=login', formData);
+        
+        if (data.success) {
+            window.location.href = data.redirect || 'user_home.php';
+        } else {
+            alert('Login failed: ' + (data.message || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Connection error: ' + error.message);
+    }
+});
+
+// Updated register function
+document.getElementById('registerForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        full_name: document.getElementById('reg_fullname').value,
+        username: document.getElementById('reg_username').value,
+        password: document.getElementById('reg_password').value,
+        role: document.querySelector('input[name="role"]:checked').value
+    };
+
+    try {
+        const data = await apiCall('auth.php?action=register', formData);
+        
+        if (data.success) {
+            alert('Registration successful! Please login.');
+            showLogin();
+        } else {
+            alert('Registration failed: ' + (data.message || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Registration error: ' + error.message);
+    }
+});
 
 // ======================================
 // 2. FEATURE: CUSTOMER ORDERING (Smart Ordering & Preview)

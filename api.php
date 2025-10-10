@@ -491,7 +491,31 @@ if ($action === 'export_data') {
                 ]);
             }
             break;
+            
+            // In api.php
+case 'add_to_cart':
+    $food_id = $data['food_id'];
+    $quantity = $data['quantity'];
+    $name = $data['name'];
+    $price = $data['price'];
+    
+    if (!isset($_SESSION['cart'])) {
+        $_SESSION['cart'] = [];
     }
+    
+    $_SESSION['cart'][$food_id] = [
+        'name' => $name,
+        'price' => $price,
+        'quantity' => $quantity
+    ];
+    
+    echo json_encode([
+        'success' => true,
+        'cart_count' => count($_SESSION['cart'])
+    ]);
+    break;
+    
+        }
     
     fclose($output);
     exit;

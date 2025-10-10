@@ -7,275 +7,286 @@ if (empty($_SESSION['user']) || $_SESSION['user']['role'] !== 'customer') {
     exit;
 }
 
-// Get food items with stock > 0
-$foods = [];
-$res = $conn->query("SELECT * FROM food_items WHERE stock > 0 ORDER BY name ASC");
-while ($r = $res->fetch_assoc()) $foods[] = $r;
+// Enhanced search and filtering
+$search = $_GET['search'] ?? '';
+$category = $_GET['category'] ?? '';
 
-// Get user's recent orders
-$user_orders = [];
-$user_id = $_SESSION['user']['id'];
-$order_res = $conn->query("
-    SELECT o.*, SUM(oi.quantity) as total_items 
-    FROM orders o 
-    LEFT JOIN order_items oi ON o.id = oi.order_id 
-    WHERE o.customer_name = '".$conn->real_escape_string($_SESSION['user']['full_name'])."'
-    GROUP BY o.id 
-    ORDER BY o.order_date DESC 
-    LIMIT 5
-");
-while ($or = $order_res->fetch_assoc()) $user_orders[] = $or;
+$query = "SELECT f.*, 
+          (SELECT COUNT(*) FROM user_favorites uf WHERE uf.user_id = ? AND uf.food_id = f.id) as is_favorite 
+          FROM food_items f 
+          WHERE f.stock > 0";
+$params = [$_SESSION['user']['id']];
+
+if (!empty($search)) {
+    $query .= " AND (f.name LIKE ? OR f.description LIKE ?)";
+    $search_term = "%$search%";
+    $params[] = $search_term;
+    $params[] = $search_term;
+}
+
+if (!empty($category) && $category !== 'all') {
+    $query .= " AND f.category = ?";
+    $params[] = $category;
+}
+
+$query .= " ORDER BY f.name ASC";
+
+$stmt = $conn->prepare($query);
+$types = str_repeat('s', count($params));
+$stmt->bind_param($types, ...$params);
+$stmt->execute();
+$result = $stmt->get_result();
+
+$foods = [];
+while ($r = $result->fetch_assoc()) $foods[] = $r;
+
+// Get unique categories for filter
+$categories = [];
+$cat_res = $conn->query("SELECT DISTINCT category FROM food_items WHERE category IS NOT NULL AND category != ''");
+while ($cat = $cat_res->fetch_assoc()) $categories[] = $cat['category'];
+
+// Get user favorites
+$favorites = [];
+$fav_res = $conn->prepare("SELECT f.* FROM user_favorites uf JOIN food_items f ON uf.food_id = f.id WHERE uf.user_id = ?");
+$fav_res->bind_param('i', $_SESSION['user']['id']);
+$fav_res->execute();
+$fav_result = $fav_res->get_result();
+while ($fav = $fav_result->fetch_assoc()) $favorites[] = $fav;
+
+// Handle add to cart form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_to_cart'])) {
+    $food_id = $_POST['food_id'];
+    $quantity = intval($_POST['quantity']);
+    
+    // Get food item details
+    $food_result = $conn->query("SELECT * FROM food_items WHERE id = $food_id");
+    $food = $food_result->fetch_assoc();
+    
+    if ($food && $quantity > 0 && $quantity <= $food['stock']) {
+        // Initialize cart if not exists
+        if (!isset($_SESSION['cart'])) {
+            $_SESSION['cart'] = [];
+        }
+        
+        // Add item to cart or update quantity
+        if (isset($_SESSION['cart'][$food_id])) {
+            $_SESSION['cart'][$food_id]['quantity'] += $quantity;
+        } else {
+            $_SESSION['cart'][$food_id] = [
+                'name' => $food['name'],
+                'price' => $food['price'],
+                'quantity' => $quantity
+            ];
+        }
+        
+        // Redirect to avoid form resubmission
+        header('Location: user_home.php?added=' . $food_id);
+        exit;
+    }
+}
+
+// Get cart items from session
+$cart = $_SESSION['cart'] ?? [];
+$cart_count = count($cart);
 ?>
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Foodhouse | Smart Ordering</title>
+  <title>Foodhouse | Menu</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <style>
-    /* Enhanced mobile responsiveness */
-    @media (max-width: 768px) {
-      .grid-2 {
-        grid-template-columns: 1fr;
-      }
-      .menu-grid {
-        grid-template-columns: 1fr;
-      }
-      .order-sidebar {
-        order: -1;
-      }
-      nav {
-        flex-direction: column;
-        gap: 10px;
-      }
-      .quantity-controls {
-        flex-direction: row;
-        justify-content: center;
-      }
-    }
-
-    /* Platform indicator */
-    .platform-indicator {
-      background: #e74c3c;
-      color: white;
-      padding: 5px 10px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      margin-left: 10px;
-    }
-
-    /* Enhanced mobile touch targets */
-    .menu-item {
-      padding: 15px;
-      margin: 10px 0;
-    }
-
-    .qty-btn, .btn-add {
-      min-height: 44px;
-      min-width: 44px;
-    }
-
-    /* Real-time inventory indicator */
-    .inventory-live {
-      background: #f8f9fa;
+    .success-message {
+      background: #d4edda;
+      color: #155724;
       padding: 10px;
-      border-radius: 5px;
+      border-radius: 4px;
       margin: 10px 0;
       text-align: center;
-      border-left: 4px solid #28a745;
     }
-
-    /* Mobile enhancements */
-    .touch-device .menu-item {
-      padding: 20px;
+    .cart-badge {
+      background: #e74c3c;
+      color: white;
+      border-radius: 50%;
+      padding: 2px 6px;
+      font-size: 0.8rem;
+      margin-left: 5px;
     }
   </style>
 </head>
 <body>
 <nav>
-  <h1>🍖 Foodhouse Smart Ordering 
-    <span class="platform-indicator">Web & Mobile</span>
-  </h1>
+  <h1>🍖 Foodhouse Grillhouse</h1>
   <div>
     <span>Hi, <?=htmlspecialchars($_SESSION['user']['full_name'])?></span>
-    <a href="feedback.php" style="margin-left: 1rem;">⭐ Feedback</a>
-    <a href="auth.php?action=logout" style="margin-left: 1rem;">Logout</a>
+    <!-- Cart Icon with Badge -->
+    <a href="user_checkout.php" style="text-decoration: none; font-size: 1.2rem; margin-right: 15px;">
+      🛒
+      <?php if ($cart_count > 0): ?>
+        <span class="cart-badge"><?=$cart_count?></span>
+      <?php endif; ?>
+    </a>
+    <a href="feedback.php">⭐ Feedback</a>
+    <a href="auth.php?action=logout">Logout</a>
   </div>
 </nav>
 
-<!-- Real-time Inventory Status -->
-<div class="inventory-live">
-  <strong>📊 Real-time Inventory Active</strong> - Stock levels update automatically with each order
-</div>
-
-<main class="container grid-2">
-  <!-- Left Column: Menu -->
+<main class="container">
   <section class="card">
-    <h2>🍽️ Smart Menu System</h2>
-    <p class="subtitle">Real-time inventory tracking • Multi-platform access</p>
+    <div class="page-header">
+      <h2>🍽️ Our Menu</h2>
+      <div class="cart-summary">
+ 
+      </div>
+    </div>
     
-    <form id="orderForm">
+    <?php if (isset($_GET['added'])): ?>
+      <div class="success-message">
+        ✅ Item added to cart successfully!
+      </div>
+    <?php endif; ?>
+    
+    <!-- Search and Filter Bar -->
+    <div class="search-filter-bar">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Search menu items..." value="<?=htmlspecialchars($search)?>">
+      </div>
+      
+      <select id="categoryFilter" class="filter-select" onchange="performSearch()">
+        <option value="all">All Categories</option>
+        <?php foreach($categories as $cat): ?>
+          <option value="<?=htmlspecialchars($cat)?>" <?=$category === $cat ? 'selected' : ''?>>
+            <?=htmlspecialchars($cat)?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+      
+      <button onclick="clearFilters()" class="quick-action-btn">Clear Filters</button>
+    </div>
+
+    <!-- Favorites Section -->
+    <?php if (!empty($favorites)): ?>
+    <div class="favorites-section" style="margin-bottom: 2rem;">
+      <h3 style="color: #d87b3e; border-bottom: 2px solid #d87b3e; padding-bottom: 0.5rem;">⭐ Your Favorites</h3>
       <div class="menu-grid">
-        <?php if (empty($foods)): ?>
-          <div class="no-items">
-            <p>😔 No items available at the moment.</p>
-            <p>Please check back later!</p>
-          </div>
-        <?php else: ?>
-          <?php foreach ($foods as $f): ?>
-            <div class="menu-item" data-id="<?=$f['id']?>" data-price="<?=$f['price']?>" data-stock="<?=$f['stock']?>">
+        <?php foreach($favorites as $f): ?>
+          <form method="POST" class="menu-item-form">
+            <input type="hidden" name="food_id" value="<?=$f['id']?>">
+            <div class="menu-item" data-id="<?=$f['id']?>" data-price="<?=$f['price']?>">
+              <button type="button" class="favorite-btn active" data-food-id="<?=$f['id']?>" onclick="toggleFavorite(<?=$f['id']?>)">❤️</button>
               <h3><?=htmlspecialchars($f['name'])?></h3>
               <?php if (!empty($f['description'])): ?>
                 <p class="description"><?=htmlspecialchars($f['description'])?></p>
               <?php endif; ?>
               <p class="price">₱<?=number_format($f['price'], 2)?></p>
               <p class="stock <?=$f['stock'] <= 5 ? 'low-stock' : ''?>">
-                📦 Stock: <?=$f['stock']?>
+                Stock: <?=$f['stock']?>
                 <?php if ($f['stock'] <= 5): ?>
                   <span class="stock-warning">(Low Stock)</span>
                 <?php endif; ?>
               </p>
               <div class="quantity-controls">
                 <button type="button" class="qty-btn minus" onclick="adjustQuantity(<?=$f['id']?>, -1)">-</button>
-                <input class="item_qty" data-id="<?=$f['id']?>" type="number" min="0" max="<?=$f['stock']?>" value="0" 
-                       onchange="validateQuantity(<?=$f['id']?>, <?=$f['stock']?>)">
+                <input class="item_qty" name="quantity" data-id="<?=$f['id']?>" type="number" min="0" max="<?=$f['stock']?>" value="0">
                 <button type="button" class="qty-btn plus" onclick="adjustQuantity(<?=$f['id']?>, 1)">+</button>
               </div>
-              <button type="button" class="btn-add" onclick="addToCart(<?=$f['id']?>)">
+              <button type="submit" name="add_to_cart" class="btn-add">
                 Add to Cart
               </button>
             </div>
-          <?php endforeach; ?>
-        <?php endif; ?>
-      </div>
-
-      <hr style="margin: 1.5rem 0; border-color: #eee;">
-      
-      <div class="form-group">
-        <label for="customer_name">👤 Customer Name</label>
-        <input id="customer_name" value="<?=htmlspecialchars($_SESSION['user']['full_name'])?>" readonly>
-      </div>
-      
-      <div class="flex">
-        <div class="form-group">
-          <label for="order_type">🍽️ Order Type</label>
-          <select id="order_type">
-            <option value="Dine-in">🍽️ Dine-in</option>
-            <option value="Take-out">🥡 Take-out</option>
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label for="payment_type">💳 Payment Method</label>
-          <select id="payment_type">
-            <option value="Cash">💵 Cash</option>
-            <option value="GCash">📱 GCash</option>
-          </select>
-        </div>
-      </div>
-      
-      <div class="form-group">
-        <label for="special_instructions">📝 Special Instructions (Optional)</label>
-        <textarea id="special_instructions" placeholder="Any special requests or dietary restrictions..." rows="3"></textarea>
-      </div>
-    </form>
-  </section>
-
-  <!-- Right Column: Smart Order Summary -->
-  <section class="order-sidebar">
-    <!-- Order Summary -->
-    <div class="card">
-      <h2>🛒 Smart Order Summary</h2>
-      <div id="orderSummaryDetails">
-        <p style="text-align: center; color: #888;">Select items from the menu to see the summary.</p>
-      </div>
-      
-      <hr style="margin: 1.5rem 0; border-color: #eee;">
-      
-      <div class="order-total">
-        <div class="total-line">
-          <span>Subtotal:</span>
-          <span id="subtotal">₱0.00</span>
-        </div>
-        <div class="total-line">
-          <span>Service Fee:</span>
-          <span id="serviceFee">₱0.00</span>
-        </div>
-        <div class="total-line grand-total">
-          <span><strong>Total:</strong></span>
-          <span id="orderTotal"><strong>₱0.00</strong></span>
-        </div>
-      </div>
-      
-      <button type="submit" form="orderForm" class="btn-order">🚀 Place Smart Order</button>
-      
-      <div class="order-notice">
-        <p>📞 Need help? Call: (02) 1234-5678</p>
-        <p>⏰ Smart Preparation: 15-25 minutes</p>
-        <p>📱 Access on any device</p>
+          </form>
+        <?php endforeach; ?>
       </div>
     </div>
+    <?php endif; ?>
 
-    <!-- Recent Orders -->
-    <div class="card">
-      <h2>📋 Order History</h2>
-      <div class="recent-orders">
-        <?php if (empty($user_orders)): ?>
-          <p style="text-align: center; color: #888;">No recent orders found.</p>
-        <?php else: ?>
-          <?php foreach ($user_orders as $order): ?>
-            <div class="recent-order-item">
-              <div class="order-header">
-                <span class="order-id">#<?=$order['id']?></span>
-                <span class="order-date"><?=date('M j, g:i A', strtotime($order['order_date']))?></span>
+    <p class="subtitle">Select items and quantities to add to your cart</p>
+    
+    <div class="menu-grid">
+      <?php if (empty($foods)): ?>
+        <div class="no-items">
+          <p>😔 No items available at the moment.</p>
+          <p>Please check back later!</p>
+        </div>
+      <?php else: ?>
+        <?php foreach ($foods as $f): ?>
+          <form method="POST" class="menu-item-form">
+            <input type="hidden" name="food_id" value="<?=$f['id']?>">
+            <div class="menu-item" data-id="<?=$f['id']?>" data-price="<?=$f['price']?>">
+              <button type="button" class="favorite-btn <?=$f['is_favorite'] ? 'active' : ''?>" data-food-id="<?=$f['id']?>" onclick="toggleFavorite(<?=$f['id']?>)">
+                <?=$f['is_favorite'] ? '❤️' : '🤍'?>
+              </button>
+              <h3><?=htmlspecialchars($f['name'])?></h3>
+              <?php if (!empty($f['description'])): ?>
+                <p class="description"><?=htmlspecialchars($f['description'])?></p>
+              <?php endif; ?>
+              <?php if (!empty($f['category'])): ?>
+                <p class="category" style="color: #666; font-size: 0.8rem; background: #f0f0f0; padding: 2px 8px; border-radius: 12px; display: inline-block;">
+                  <?=htmlspecialchars($f['category'])?>
+                </p>
+              <?php endif; ?>
+              <p class="price">₱<?=number_format($f['price'], 2)?></p>
+              <p class="stock <?=$f['stock'] <= 5 ? 'low-stock' : ''?>">
+                Stock: <?=$f['stock']?>
+                <?php if ($f['stock'] <= 5): ?>
+                  <span class="stock-warning">(Low Stock)</span>
+                <?php endif; ?>
+              </p>
+              <div class="quantity-controls">
+                <button type="button" class="qty-btn minus" onclick="adjustQuantity(<?=$f['id']?>, -1)">-</button>
+                <input class="item_qty" name="quantity" data-id="<?=$f['id']?>" type="number" min="0" max="<?=$f['stock']?>" value="0">
+                <button type="button" class="qty-btn plus" onclick="adjustQuantity(<?=$f['id']?>, 1)">+</button>
               </div>
-              <div class="order-details">
-                <span class="order-type"><?=$order['order_type']?></span>
-                <span class="order-total">₱<?=number_format($order['total'], 2)?></span>
-              </div>
-              <div class="order-status <?=strtolower($order['status'] ?? 'completed')?>">
-                <?=ucfirst($order['status'] ?? 'completed')?>
-              </div>
+              <button type="submit" name="add_to_cart" class="btn-add">
+                Add to Cart
+              </button>
             </div>
-          <?php endforeach; ?>
-        <?php endif; ?>
-      </div>
-      <?php if (!empty($user_orders)): ?>
-        <a href="order_history.php" class="view-all-orders">View All Orders →</a>
+          </form>
+        <?php endforeach; ?>
       <?php endif; ?>
     </div>
   </section>
 </main>
 
-<!-- Enhanced Success Modal -->
-<div id="orderSuccessModal" class="modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2>🎉 Smart Order Placed!</h2>
-      <span class="close">&times;</span>
-    </div>
-    <div class="modal-body">
-      <p>Your order <strong id="modalOrderId"></strong> has been placed successfully!</p>
-      <div class="order-details-modal">
-        <p><strong>💰 Total Amount:</strong> <span id="modalOrderTotal"></span></p>
-        <p><strong>📦 Order Type:</strong> <span id="modalOrderType"></span></p>
-        <p><strong>⏱️ Estimated Ready:</strong> <span id="modalReadyTime"></span></p>
-        <p><strong>📱 Platform:</strong> Web & Mobile System</p>
-      </div>
-      <p class="modal-note">✅ Inventory automatically updated • 📧 You will receive confirmation</p>
-    </div>
-    <div class="modal-footer">
-      <button onclick="closeModal()" class="btn-primary">🔄 Continue Ordering</button>
-      <button onclick="printReceipt()" class="btn-secondary">🖨️ Print Receipt</button>
-    </div>
-  </div>
-</div>
-
-<script src="js/main.js"></script>
 <script>
-// Enhanced mobile-friendly JavaScript
+// Enhanced JavaScript for menu page
+
+// Search with debouncing
+let searchTimeout;
+function performSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        const searchTerm = document.getElementById('searchInput').value;
+        const category = document.getElementById('categoryFilter').value;
+        
+        const url = new URL(window.location);
+        url.searchParams.set('search', searchTerm);
+        url.searchParams.set('category', category);
+        
+        window.location.href = url.toString();
+    }, 500);
+}
+
+function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('categoryFilter').value = 'all';
+    performSearch();
+}
+
+// Favorites system (optional - remove if not needed)
+async function toggleFavorite(foodId) {
+    try {
+        // This requires api.php to work - remove if causing errors
+        console.log('Favorite toggle for:', foodId);
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+    }
+}
+
+// Cart management functions
 function adjustQuantity(itemId, change) {
     const input = document.querySelector(`.item_qty[data-id="${itemId}"]`);
     const currentValue = parseInt(input.value) || 0;
@@ -284,62 +295,31 @@ function adjustQuantity(itemId, change) {
     
     if (newValue >= 0 && newValue <= maxStock) {
         input.value = newValue;
-        updateOrderPreview();
-        
-        // Visual feedback for mobile
-        const itemElement = input.closest('.menu-item');
-        if (change > 0) {
-            itemElement.style.transform = 'scale(1.05)';
-            setTimeout(() => itemElement.style.transform = 'scale(1)', 300);
+    }
+}
+
+// Form validation
+document.querySelectorAll('.menu-item-form').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        const quantity = this.querySelector('.item_qty').value;
+        if (quantity <= 0) {
+            e.preventDefault();
+            alert('Please select a quantity greater than 0');
+            return false;
         }
-    }
-}
-
-// Real-time inventory check
-function checkRealTimeStock() {
-    console.log('Real-time inventory monitoring active');
-}
-
-// Initialize enhanced features
-document.addEventListener('DOMContentLoaded', function() {
-    updateOrderPreview();
-    checkRealTimeStock();
-    
-    // Add mobile-specific enhancements
-    if ('ontouchstart' in window) {
-        document.body.classList.add('touch-device');
-    }
-    
-    // Auto-save cart for multi-platform continuity
-    setInterval(saveCartState, 30000);
+        return true;
+    });
 });
 
-function saveCartState() {
-    const cartData = {};
-    document.querySelectorAll('.item_qty').forEach(input => {
-        if (input.value > 0) {
-            cartData[input.dataset.id] = input.value;
-        }
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Add animation to menu items on load
+    const menuItems = document.querySelectorAll('.menu-item');
+    menuItems.forEach((item, index) => {
+        item.style.animationDelay = `${index * 0.1}s`;
+        item.classList.add('fade-in');
     });
-    localStorage.setItem('foodhouse_cart', JSON.stringify(cartData));
-}
-
-function loadCartState() {
-    const saved = localStorage.getItem('foodhouse_cart');
-    if (saved) {
-        const cartData = JSON.parse(saved);
-        Object.keys(cartData).forEach(itemId => {
-            const input = document.querySelector(`.item_qty[data-id="${itemId}"]`);
-            if (input) {
-                input.value = cartData[itemId];
-            }
-        });
-        updateOrderPreview();
-    }
-}
-
-// Load saved cart on page load
-loadCartState();
+});
 </script>
 </body>
 </html>

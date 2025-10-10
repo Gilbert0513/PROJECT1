@@ -11,58 +11,16 @@ if ($conn->connect_error) {
 }
 $conn->set_charset('utf8mb4');
 
-// Create additional tables if they don't exist
-$additional_tables = [
-    "CREATE TABLE IF NOT EXISTS user_favorites (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT,
-        food_id INT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (food_id) REFERENCES food_items(id),
-        UNIQUE KEY unique_favorite (user_id, food_id)
-    )",
-    
-    "ALTER TABLE food_items ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Uncategorized'",
-    
-    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending'",
-    
-    // Multi-platform tables
-    "CREATE TABLE IF NOT EXISTS platform_sessions (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT,
-        platform ENUM('web', 'mobile') DEFAULT 'web',
-        device_info TEXT,
-        last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )",
-    
-    "CREATE TABLE IF NOT EXISTS user_carts (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT,
-        cart_data TEXT,
-        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_user_cart (user_id)
-    )",
-    
-    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_via ENUM('web', 'mobile') DEFAULT 'web'",
-    
-    "CREATE TABLE IF NOT EXISTS system_metrics (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        metric_type VARCHAR(50),
-        metric_value DECIMAL(10,2),
-        recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )"
-];
-
-foreach ($additional_tables as $query) {
-    if (!$conn->query($query)) {
-        // Silently continue if table already exists or has errors
-        error_log("Table creation warning: " . $conn->error);
-    }
-}
-
-// Check if essential tables exist, create them if not
+// First, drop and recreate tables to ensure correct structure
 $essential_tables = [
+    // Drop tables if they exist (to recreate with correct structure)
+    "DROP TABLE IF EXISTS customer_order_items",
+    "DROP TABLE IF EXISTS customer_order",
+    "DROP TABLE IF EXISTS feedback",
+    "DROP TABLE IF EXISTS user_favorites",
+    "DROP TABLE IF EXISTS user_carts",
+    
+    // Create users table
     "CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         full_name VARCHAR(100) NOT NULL,
@@ -72,6 +30,7 @@ $essential_tables = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )",
     
+    // Create food_items table
     "CREATE TABLE IF NOT EXISTS food_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
@@ -82,28 +41,33 @@ $essential_tables = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )",
     
-    "CREATE TABLE IF NOT EXISTS orders (
+    // Create customer_order table with ALL required columns
+    "CREATE TABLE customer_order (
         id INT AUTO_INCREMENT PRIMARY KEY,
         customer_name VARCHAR(100) NOT NULL,
-        order_type ENUM('Dine-in', 'Take-out', 'Delivery') DEFAULT 'Dine-in',
-        payment_type VARCHAR(50) DEFAULT 'Cash',
-        total DECIMAL(10,2) NOT NULL,
-        order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        order_type ENUM('Dine-in', 'Take-out') DEFAULT 'Dine-in',
+        payment_type ENUM('Cash', 'GCash', 'Credit Card') DEFAULT 'Cash',
         special_instructions TEXT,
-        status VARCHAR(20) DEFAULT 'pending',
-        created_via ENUM('web', 'mobile') DEFAULT 'web'
+        subtotal DECIMAL(10,2) NOT NULL,
+        service_fee DECIMAL(10,2) NOT NULL,
+        total DECIMAL(10,2) NOT NULL,
+        status ENUM('pending', 'preparing', 'ready', 'completed', 'cancelled') DEFAULT 'pending',
+        order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )",
     
-    "CREATE TABLE IF NOT EXISTS order_items (
+    // Create customer_order_items table with food_name column
+    "CREATE TABLE customer_order_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         order_id INT,
         food_id INT,
+        food_name VARCHAR(255) NOT NULL,
         quantity INT NOT NULL,
         price DECIMAL(10,2) NOT NULL,
-        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (order_id) REFERENCES customer_order(id) ON DELETE CASCADE,
         FOREIGN KEY (food_id) REFERENCES food_items(id)
     )",
     
+    // Create other tables
     "CREATE TABLE IF NOT EXISTS feedback (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT,
@@ -111,12 +75,50 @@ $essential_tables = [
         comments TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
+    )",
+    
+    "CREATE TABLE IF NOT EXISTS user_favorites (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT,
+        food_id INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (food_id) REFERENCES food_items(id),
+        UNIQUE KEY unique_favorite (user_id, food_id)
+    )",
+    
+    "CREATE TABLE IF NOT EXISTS user_carts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT,
+        cart_data TEXT,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_user_cart (user_id)
     )"
 ];
 
+// Execute table creation
 foreach ($essential_tables as $query) {
     if (!$conn->query($query)) {
-        error_log("Essential table creation error: " . $conn->error);
+        error_log("Table creation error: " . $conn->error);
+    }
+}
+
+// Insert sample food items
+$checkFoodItems = $conn->query("SELECT COUNT(*) as count FROM food_items");
+if ($checkFoodItems) {
+    $row = $checkFoodItems->fetch_assoc();
+    if ($row['count'] == 0) {
+        $sampleFoods = [
+            "INSERT INTO food_items (name, price, stock, category, description) VALUES ('Classic Burger', 120.00, 50, 'Main Course', 'Juicy beef burger with fresh vegetables')",
+            "INSERT INTO food_items (name, price, stock, category, description) VALUES ('Pepperoni Pizza', 250.00, 30, 'Main Course', 'Classic pizza with pepperoni and cheese')",
+            "INSERT INTO food_items (name, price, stock, category, description) VALUES ('French Fries', 60.00, 100, 'Side Dish', 'Crispy golden fries')",
+            "INSERT INTO food_items (name, price, stock, category, description) VALUES ('Cola', 35.00, 200, 'Beverage', 'Refreshing carbonated drink')",
+            "INSERT INTO food_items (name, price, stock, category, description) VALUES ('Vanilla Ice Cream', 80.00, 40, 'Dessert', 'Creamy vanilla ice cream')"
+        ];
+        
+        foreach ($sampleFoods as $foodQuery) {
+            $conn->query($foodQuery);
+        }
     }
 }
 ?>
