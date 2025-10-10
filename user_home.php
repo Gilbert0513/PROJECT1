@@ -11,6 +11,20 @@ if (empty($_SESSION['user']) || $_SESSION['user']['role'] !== 'customer') {
 $foods = [];
 $res = $conn->query("SELECT * FROM food_items WHERE stock > 0 ORDER BY name ASC");
 while ($r = $res->fetch_assoc()) $foods[] = $r;
+
+// Get user's recent orders
+$user_orders = [];
+$user_id = $_SESSION['user']['id'];
+$order_res = $conn->query("
+    SELECT o.*, SUM(oi.quantity) as total_items 
+    FROM orders o 
+    LEFT JOIN order_items oi ON o.id = oi.order_id 
+    WHERE o.customer_name = '".$conn->real_escape_string($_SESSION['user']['full_name'])."'
+    GROUP BY o.id 
+    ORDER BY o.order_date DESC 
+    LIMIT 5
+");
+while ($or = $order_res->fetch_assoc()) $user_orders[] = $or;
 ?>
 <!doctype html>
 <html lang="en">
@@ -45,7 +59,7 @@ while ($r = $res->fetch_assoc()) $foods[] = $r;
           </div>
         <?php else: ?>
           <?php foreach ($foods as $f): ?>
-            <div class="menu-item" data-id="<?=$f['id']?>" data-price="<?=$f['price']?>" data-name="<?=htmlspecialchars($f['name'])?>">
+            <div class="menu-item" data-id="<?=$f['id']?>" data-price="<?=$f['price']?>">
               <h3><?=htmlspecialchars($f['name'])?></h3>
               <?php if (!empty($f['description'])): ?>
                 <p class="description"><?=htmlspecialchars($f['description'])?></p>
@@ -106,8 +120,9 @@ while ($r = $res->fetch_assoc()) $foods[] = $r;
     </form>
   </section>
 
-  <!-- Right Column: Order Summary -->
+  <!-- Right Column: Order Summary & Recent Orders -->
   <section class="order-sidebar">
+    <!-- Order Summary -->
     <div class="card">
       <h2>🛒 Order Summary</h2>
       <div id="orderSummaryDetails">
@@ -138,109 +153,63 @@ while ($r = $res->fetch_assoc()) $foods[] = $r;
         <p>⏰ Preparation time: 15-25 minutes</p>
       </div>
     </div>
+
+    <!-- Recent Orders -->
+    <div class="card">
+      <h2>📋 Recent Orders</h2>
+      <div class="recent-orders">
+        <?php if (empty($user_orders)): ?>
+          <p style="text-align: center; color: #888;">No recent orders found.</p>
+        <?php else: ?>
+          <?php foreach ($user_orders as $order): ?>
+            <div class="recent-order-item">
+              <div class="order-header">
+                <span class="order-id">#<?=$order['id']?></span>
+                <span class="order-date"><?=date('M j, g:i A', strtotime($order['order_date']))?></span>
+              </div>
+              <div class="order-details">
+                <span class="order-type"><?=$order['order_type']?></span>
+                <span class="order-total">₱<?=number_format($order['total'], 2)?></span>
+              </div>
+              <div class="order-status <?=strtolower($order['status'] ?? 'completed')?>">
+                <?=ucfirst($order['status'] ?? 'completed')?>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
+      <?php if (!empty($user_orders)): ?>
+        <a href="order_history.php" class="view-all-orders">View All Orders →</a>
+      <?php endif; ?>
+    </div>
   </section>
 </main>
 
-<!-- Receipt Modal -->
-<div id="receiptModal" class="modal">
-  <div class="modal-content receipt">
-    <div class="receipt-header">
-      <div class="restaurant-icon">🍖</div>
-      <h2>Foodhouse Grillhouse</h2>
-      <p>Official Receipt</p>
+<!-- Order Success Modal -->
+<div id="orderSuccessModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>🎉 Order Placed Successfully!</h2>
+      <span class="close">&times;</span>
     </div>
-    
-    <div class="receipt-body">
-      <div class="receipt-info">
-        <div class="receipt-row">
-          <span>Order ID:</span>
-          <span id="receiptOrderId">-</span>
-        </div>
-        <div class="receipt-row">
-          <span>Date & Time:</span>
-          <span id="receiptDate">-</span>
-        </div>
-        <div class="receipt-row">
-          <span>Customer:</span>
-          <span id="receiptCustomer">-</span>
-        </div>
-        <div class="receipt-row">
-          <span>Order Type:</span>
-          <span id="receiptOrderType">-</span>
-        </div>
-        <div class="receipt-row">
-          <span>Payment Method:</span>
-          <span id="receiptPayment">-</span>
-        </div>
+    <div class="modal-body">
+      <p>Your order <strong id="modalOrderId"></strong> has been placed successfully!</p>
+      <div class="order-details-modal">
+        <p><strong>Total Amount:</strong> <span id="modalOrderTotal"></span></p>
+        <p><strong>Order Type:</strong> <span id="modalOrderType"></span></p>
+        <p><strong>Estimated Ready:</strong> <span id="modalReadyTime"></span></p>
       </div>
-      
-      <div class="receipt-divider">══════════════════════════════</div>
-      
-      <div class="receipt-items">
-        <table id="receiptItemsTable">
-          <thead>
-            <tr>
-              <th style="text-align: left;">Item</th>
-              <th style="text-align: center;">Qty</th>
-              <th style="text-align: right;">Price</th>
-              <th style="text-align: right;">Total</th>
-            </tr>
-          </thead>
-          <tbody id="receiptItemsBody">
-            <!-- Items will be populated here -->
-          </tbody>
-        </table>
-      </div>
-      
-      <div class="receipt-divider">────────────────────────────</div>
-      
-      <div class="receipt-totals">
-        <div class="receipt-row">
-          <span>Subtotal:</span>
-          <span id="receiptSubtotal">₱0.00</span>
-        </div>
-        <div class="receipt-row">
-          <span>Service Fee:</span>
-          <span id="receiptServiceFee">₱0.00</span>
-        </div>
-        <div class="receipt-row grand-total">
-          <span><strong>TOTAL:</strong></span>
-          <span id="receiptGrandTotal"><strong>₱0.00</strong></span>
-        </div>
-      </div>
-      
-      <div class="receipt-divider">══════════════════════════════</div>
-      
-      <div class="thank-you-section">
-        <div class="thank-you-icon">🎉</div>
-        <h3>Thank You for Your Order!</h3>
-        <p>Your food is being prepared with love ❤️</p>
-        <div class="order-timing">
-          <p><strong>Estimated Ready Time:</strong></p>
-          <p id="receiptReadyTime" class="ready-time">-</p>
-        </div>
-      </div>
-      
-      <div class="receipt-footer">
-        <p><strong>We appreciate your business!</strong></p>
-        <p>📞 (02) 1234-5678</p>
-        <p>📍 123 Food Street, Manila</p>
-        <p>🕒 Mon-Sun: 8:00 AM - 10:00 PM</p>
-      </div>
+      <p class="modal-note">You will receive an SMS confirmation shortly.</p>
     </div>
-    
-    <div class="receipt-actions">
-      <button onclick="printReceipt()" class="btn-print">🖨️ Print Receipt</button>
-      <button onclick="closeReceipt()" class="btn-close">Close</button>
+    <div class="modal-footer">
+      <button onclick="closeModal()" class="btn-primary">Continue Shopping</button>
+      <button onclick="printReceipt()" class="btn-secondary">Print Receipt</button>
     </div>
   </div>
 </div>
 
 <script src="js/main.js"></script>
 <script>
-// Store order data for receipt
-let currentOrderData = null;
-
 // Additional JavaScript for user home page
 function adjustQuantity(itemId, change) {
     const input = document.querySelector(`.item_qty[data-id="${itemId}"]`);
@@ -307,208 +276,26 @@ function showQuickNotification(message, type = 'success') {
     }, 3000);
 }
 
-// In your user_home.php - Replace the showReceipt function with this:
-
-function showReceipt(orderData) {
-    currentOrderData = orderData;
-    
-    // Ensure all prices are numbers
-    const processedItems = orderData.items.map(item => ({
-        ...item,
-        price: parseFloat(item.price) || 0,
-        qty: parseInt(item.qty) || 0
-    }));
-    
-    // Update orderData with processed items
-    const processedOrderData = {
-        ...orderData,
-        items: processedItems,
-        total: parseFloat(orderData.total) || 0,
-        service_fee: parseFloat(orderData.service_fee) || 0,
-        grand_total: parseFloat(orderData.grand_total) || 0
-    };
-
-    // Populate receipt data
-    document.getElementById('receiptOrderId').textContent = '#' + processedOrderData.order_id;
-    document.getElementById('receiptDate').textContent = new Date().toLocaleString();
-    document.getElementById('receiptCustomer').textContent = processedOrderData.customer_name;
-    document.getElementById('receiptOrderType').textContent = processedOrderData.order_type;
-    document.getElementById('receiptPayment').textContent = processedOrderData.payment_type;
-    document.getElementById('receiptSubtotal').textContent = '₱' + (processedOrderData.total || 0).toFixed(2);
-    document.getElementById('receiptServiceFee').textContent = '₱' + (processedOrderData.service_fee || 0).toFixed(2);
-    document.getElementById('receiptGrandTotal').textContent = '₱' + (processedOrderData.grand_total || 0).toFixed(2);
-    
-    // Calculate estimated ready time
-    const now = new Date();
-    const readyTime = new Date(now.getTime() + (20 * 60 * 1000));
-    document.getElementById('receiptReadyTime').textContent = readyTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-    
-    // Populate items with safe number handling
-    const itemsBody = document.getElementById('receiptItemsBody');
-    itemsBody.innerHTML = '';
-    
-    processedItems.forEach(item => {
-        const row = document.createElement('tr');
-        const price = parseFloat(item.price) || 0;
-        const qty = parseInt(item.qty) || 0;
-        const total = price * qty;
-        
-        row.innerHTML = `
-            <td style="text-align: left;">${item.name || 'Unknown Item'}</td>
-            <td style="text-align: center;">${qty}</td>
-            <td style="text-align: right;">₱${price.toFixed(2)}</td>
-            <td style="text-align: right;">₱${total.toFixed(2)}</td>
-        `;
-        itemsBody.appendChild(row);
-    });
-    
-    // Show receipt modal directly
-    document.getElementById('receiptModal').style.display = 'block';
-    
-    // Auto-close after 30 seconds
-    setTimeout(() => {
-        if (document.getElementById('receiptModal').style.display === 'block') {
-            closeReceipt();
-        }
-    }, 30000);
-}
-
-
-function closeReceipt() {
-    document.getElementById('receiptModal').style.display = 'none';
+function closeModal() {
+    document.getElementById('orderSuccessModal').style.display = 'none';
     // Clear the form after successful order
     document.querySelectorAll('.item_qty').forEach(input => input.value = 0);
     updateOrderPreview();
 }
 
 function printReceipt() {
-    const receiptContent = document.querySelector('.receipt').cloneNode(true);
-    const printWindow = window.open('', '_blank');
-    
-    // Remove action buttons for print
-    const actions = receiptContent.querySelector('.receipt-actions');
-    if (actions) actions.remove();
-    
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Receipt - Order ${currentOrderData.order_id}</title>
-            <style>
-                body { 
-                    font-family: 'Courier New', monospace; 
-                    margin: 0; 
-                    padding: 20px;
-                    background: white;
-                    color: black;
-                }
-                .receipt { 
-                    max-width: 300px; 
-                    margin: 0 auto;
-                    border: 1px solid #000;
-                    padding: 20px;
-                }
-                .receipt-header { 
-                    text-align: center; 
-                    margin-bottom: 15px;
-                    border-bottom: 2px dashed #000;
-                    padding-bottom: 10px;
-                }
-                .receipt-header h2 { 
-                    margin: 5px 0; 
-                    font-size: 18px;
-                    font-weight: bold;
-                }
-                .restaurant-icon {
-                    font-size: 24px;
-                    margin-bottom: 5px;
-                }
-                .receipt-divider {
-                    text-align: center;
-                    margin: 10px 0;
-                    font-family: monospace;
-                    color: #666;
-                }
-                .receipt-row { 
-                    display: flex; 
-                    justify-content: space-between; 
-                    margin: 3px 0; 
-                    font-size: 12px;
-                }
-                .grand-total { 
-                    border-top: 2px solid #000; 
-                    padding-top: 8px; 
-                    margin-top: 8px; 
-                    font-weight: bold;
-                    font-size: 14px;
-                }
-                table { 
-                    width: 100%; 
-                    border-collapse: collapse; 
-                    margin: 10px 0;
-                    font-size: 11px;
-                }
-                th, td { 
-                    padding: 3px; 
-                    text-align: left; 
-                }
-                th { 
-                    font-weight: bold;
-                    border-bottom: 1px dashed #000;
-                }
-                .thank-you-section {
-                    text-align: center;
-                    margin: 15px 0;
-                    padding: 10px;
-                    background: #f8f9fa;
-                    border-radius: 5px;
-                }
-                .thank-you-icon {
-                    font-size: 24px;
-                    margin-bottom: 5px;
-                }
-                .thank-you-section h3 {
-                    margin: 5px 0;
-                    color: #d87b3e;
-                }
-                .receipt-footer { 
-                    text-align: center; 
-                    margin-top: 15px; 
-                    font-size: 10px; 
-                    color: #666;
-                    border-top: 1px dashed #000;
-                    padding-top: 10px;
-                }
-                .ready-time {
-                    font-size: 14px;
-                    color: #d87b3e;
-                    font-weight: bold;
-                }
-                @media print { 
-                    body { margin: 0; }
-                    .receipt { border: none; padding: 10px; }
-                }
-            </style>
-        </head>
-        <body>
-            ${receiptContent.innerHTML}
-        </body>
-        </html>
-    `);
-    
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-    }, 500);
+    // Simple print functionality
+    window.print();
 }
+
+// Close modal when clicking on X
+document.querySelector('.close').addEventListener('click', closeModal);
 
 // Close modal when clicking outside
 window.addEventListener('click', function(event) {
-    const receiptModal = document.getElementById('receiptModal');
-    if (event.target === receiptModal) {
-        closeReceipt();
+    const modal = document.getElementById('orderSuccessModal');
+    if (event.target === modal) {
+        closeModal();
     }
 });
 
@@ -522,7 +309,7 @@ document.addEventListener('keydown', function(e) {
     
     // Escape to close modal
     if (e.key === 'Escape') {
-        closeReceipt();
+        closeModal();
     }
 });
 
