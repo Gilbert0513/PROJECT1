@@ -40,7 +40,9 @@ while ($or = $order_res->fetch_assoc()) $user_orders[] = $or;
   <h1>🍖 Foodhouse Grillhouse</h1>
   <div>
     <span>Hi, <?=htmlspecialchars($_SESSION['user']['full_name'])?></span>
-    <a href="auth.php?action=logout">Logout</a>
+    <!-- Added Feedback Link -->
+    <a href="feedback.php" style="margin-left: 1rem;">⭐ Feedback</a>
+    <a href="auth.php?action=logout" style="margin-left: 1rem;">Logout</a>
   </div>
 </nav>
 
