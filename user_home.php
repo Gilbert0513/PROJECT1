@@ -1,3 +1,5 @@
+[file name]: user_home.php
+[file content begin]
 <?php
 session_start();
 require_once 'db.php';
@@ -114,6 +116,220 @@ $cart_count = count($cart);
       font-size: 0.8rem;
       margin-left: 5px;
     }
+    
+    /* Updated Menu Grid Styles */
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    
+    .menu-item {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      padding: 20px;
+      transition: transform 0.3s, box-shadow 0.3s;
+      position: relative;
+      border: 1px solid #eee;
+    }
+    
+    .menu-item:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    }
+    
+    .menu-item h3 {
+      margin: 0 0 10px 0;
+      font-size: 1.2rem;
+      color: #333;
+    }
+    
+    .menu-item .description {
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+    
+    .menu-item .price {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #e74c3c;
+      margin: 10px 0;
+    }
+    
+    .menu-item .stock {
+      font-size: 0.85rem;
+      margin-bottom: 15px;
+    }
+    
+    .low-stock {
+      color: #e74c3c;
+    }
+    
+    .stock-warning {
+      font-weight: 600;
+    }
+    
+    .category {
+      color: #666;
+      font-size: 0.8rem;
+      background: #f0f0f0;
+      padding: 2px 8px;
+      border-radius: 12px;
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+    
+    .quantity-controls {
+      display: flex;
+      align-items: center;
+      margin: 15px 0;
+      justify-content: center;
+    }
+    
+    .qty-btn {
+      background: #f8f9fa;
+      border: 1px solid #ddd;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.2rem;
+      font-weight: bold;
+    }
+    
+    .qty-btn.minus {
+      border-radius: 6px 0 0 6px;
+    }
+    
+    .qty-btn.plus {
+      border-radius: 0 6px 6px 0;
+    }
+    
+    .item_qty {
+      width: 60px;
+      height: 36px;
+      text-align: center;
+      border: 1px solid #ddd;
+      border-left: none;
+      border-right: none;
+      font-size: 1rem;
+    }
+    
+    .btn-add {
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      width: 100%;
+      transition: background 0.3s;
+    }
+    
+    .btn-add:hover {
+      background: #c0392b;
+    }
+    
+    .favorite-btn {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: none;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 5px;
+    }
+    
+    .search-filter-bar {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    
+    .search-box {
+      position: relative;
+      flex-grow: 1;
+    }
+    
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #666;
+    }
+    
+    #searchInput {
+      width: 100%;
+      padding: 12px 12px 12px 40px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+    
+    .filter-select {
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 1rem;
+      min-width: 180px;
+    }
+    
+    .quick-action-btn {
+      padding: 12px 20px;
+      background: #6c757d;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    
+    .quick-action-btn:hover {
+      background: #5a6268;
+    }
+    
+    .no-items {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+    
+    .fade-in {
+      animation: fadeIn 0.5s ease-in-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Favorites Section Styling */
+    .favorites-section {
+      margin-bottom: 2rem;
+      padding: 20px;
+      background: #fff9e6;
+      border-radius: 12px;
+      border-left: 4px solid #ffcc00;
+    }
+    
+    .favorites-section h3 {
+      color: #d87b3e;
+      border-bottom: 2px solid #d87b3e;
+      padding-bottom: 0.5rem;
+      margin-top: 0;
+    }
   </style>
 </head>
 <body>
@@ -169,8 +385,8 @@ $cart_count = count($cart);
 
     <!-- Favorites Section -->
     <?php if (!empty($favorites)): ?>
-    <div class="favorites-section" style="margin-bottom: 2rem;">
-      <h3 style="color: #d87b3e; border-bottom: 2px solid #d87b3e; padding-bottom: 0.5rem;">⭐ Your Favorites</h3>
+    <div class="favorites-section">
+      <h3>⭐ Your Favorites</h3>
       <div class="menu-grid">
         <?php foreach($favorites as $f): ?>
           <form method="POST" class="menu-item-form">
@@ -180,6 +396,9 @@ $cart_count = count($cart);
               <h3><?=htmlspecialchars($f['name'])?></h3>
               <?php if (!empty($f['description'])): ?>
                 <p class="description"><?=htmlspecialchars($f['description'])?></p>
+              <?php endif; ?>
+              <?php if (!empty($f['category'])): ?>
+                <p class="category"><?=htmlspecialchars($f['category'])?></p>
               <?php endif; ?>
               <p class="price">₱<?=number_format($f['price'], 2)?></p>
               <p class="stock <?=$f['stock'] <= 5 ? 'low-stock' : ''?>">
@@ -224,9 +443,7 @@ $cart_count = count($cart);
                 <p class="description"><?=htmlspecialchars($f['description'])?></p>
               <?php endif; ?>
               <?php if (!empty($f['category'])): ?>
-                <p class="category" style="color: #666; font-size: 0.8rem; background: #f0f0f0; padding: 2px 8px; border-radius: 12px; display: inline-block;">
-                  <?=htmlspecialchars($f['category'])?>
-                </p>
+                <p class="category"><?=htmlspecialchars($f['category'])?></p>
               <?php endif; ?>
               <p class="price">₱<?=number_format($f['price'], 2)?></p>
               <p class="stock <?=$f['stock'] <= 5 ? 'low-stock' : ''?>">
@@ -319,7 +536,11 @@ document.addEventListener('DOMContentLoaded', function() {
         item.style.animationDelay = `${index * 0.1}s`;
         item.classList.add('fade-in');
     });
+    
+    // Add event listener for search input
+    document.getElementById('searchInput').addEventListener('input', performSearch);
 });
 </script>
 </body>
 </html>
+[file content end]

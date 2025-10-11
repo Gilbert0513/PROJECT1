@@ -11,15 +11,8 @@ if ($conn->connect_error) {
 }
 $conn->set_charset('utf8mb4');
 
-// First, drop and recreate tables to ensure correct structure
+// ONLY CREATE TABLES IF THEY DON'T EXIST - NO DROPPING!
 $essential_tables = [
-    // Drop tables if they exist (to recreate with correct structure)
-    "DROP TABLE IF EXISTS customer_order_items",
-    "DROP TABLE IF EXISTS customer_order",
-    "DROP TABLE IF EXISTS feedback",
-    "DROP TABLE IF EXISTS user_favorites",
-    "DROP TABLE IF EXISTS user_carts",
-    
     // Create users table
     "CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -42,7 +35,7 @@ $essential_tables = [
     )",
     
     // Create customer_order table with ALL required columns
-    "CREATE TABLE customer_order (
+    "CREATE TABLE IF NOT EXISTS customer_order (
         id INT AUTO_INCREMENT PRIMARY KEY,
         customer_name VARCHAR(100) NOT NULL,
         order_type ENUM('Dine-in', 'Take-out') DEFAULT 'Dine-in',
@@ -56,7 +49,7 @@ $essential_tables = [
     )",
     
     // Create customer_order_items table with food_name column
-    "CREATE TABLE customer_order_items (
+    "CREATE TABLE IF NOT EXISTS customer_order_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         order_id INT,
         food_id INT,
@@ -65,6 +58,15 @@ $essential_tables = [
         price DECIMAL(10,2) NOT NULL,
         FOREIGN KEY (order_id) REFERENCES customer_order(id) ON DELETE CASCADE,
         FOREIGN KEY (food_id) REFERENCES food_items(id)
+    )",
+    
+    // Create tables table for dine-in functionality
+    "CREATE TABLE IF NOT EXISTS tables (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        table_number INT NOT NULL,
+        capacity INT DEFAULT 4,
+        status ENUM('available', 'occupied') DEFAULT 'available',
+        UNIQUE KEY unique_table (table_number)
     )",
     
     // Create other tables
@@ -96,14 +98,40 @@ $essential_tables = [
     )"
 ];
 
-// Execute table creation
+// Execute table creation (only creates if they don't exist)
 foreach ($essential_tables as $query) {
     if (!$conn->query($query)) {
         error_log("Table creation error: " . $conn->error);
     }
 }
 
-// Insert sample food items
+// Insert sample tables ONLY if table is empty
+$checkTables = $conn->query("SELECT COUNT(*) as count FROM tables");
+if ($checkTables) {
+    $row = $checkTables->fetch_assoc();
+    if ($row['count'] == 0) {
+        $sampleTables = [
+            "INSERT INTO tables (table_number, capacity) VALUES (1, 4)",
+            "INSERT INTO tables (table_number, capacity) VALUES (2, 4)",
+            "INSERT INTO tables (table_number, capacity) VALUES (3, 4)",
+            "INSERT INTO tables (table_number, capacity) VALUES (4, 4)",
+            "INSERT INTO tables (table_number, capacity) VALUES (5, 4)",
+            "INSERT INTO tables (table_number, capacity) VALUES (6, 6)",
+            "INSERT INTO tables (table_number, capacity) VALUES (7, 6)",
+            "INSERT INTO tables (table_number, capacity) VALUES (8, 2)",
+            "INSERT INTO tables (table_number, capacity) VALUES (9, 2)",
+            "INSERT INTO tables (table_number, capacity) VALUES (10, 8)"
+        ];
+        
+        foreach ($sampleTables as $tableQuery) {
+            $conn->query($tableQuery);
+        }
+        
+        error_log("Sample tables inserted");
+    }
+}
+
+// Insert sample food items ONLY if table is empty
 $checkFoodItems = $conn->query("SELECT COUNT(*) as count FROM food_items");
 if ($checkFoodItems) {
     $row = $checkFoodItems->fetch_assoc();
@@ -119,6 +147,12 @@ if ($checkFoodItems) {
         foreach ($sampleFoods as $foodQuery) {
             $conn->query($foodQuery);
         }
+        
+        error_log("Sample food items inserted");
     }
 }
+
+// Debug: Check current orders
+$order_count = $conn->query("SELECT COUNT(*) as count FROM customer_order")->fetch_assoc();
+error_log("Current orders in database: " . $order_count['count']);
 ?>

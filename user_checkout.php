@@ -10,8 +10,67 @@ if (empty($_SESSION['user']) || $_SESSION['user']['role'] !== 'customer') {
 $customer_name = $_SESSION['user']['full_name'];
 $customer_id = $_SESSION['user']['id'];
 
-// Get cart items from session
+// Get cart items from session FIRST
 $cart = $_SESSION['cart'] ?? [];
+
+// DEBUG: Check database and tables - MOVED AFTER $cart is defined
+error_log("=== USER CHECKOUT DEBUG ===");
+error_log("Customer: " . $_SESSION['user']['full_name']);
+error_log("Cart count: " . count($cart));
+
+// Check what tables exist
+$tables_result = $conn->query("SHOW TABLES");
+$tables = [];
+while ($row = $tables_result->fetch_row()) {
+    $tables[] = $row[0];
+}
+error_log("Available tables: " . implode(', ', $tables));
+
+// Check if customer_order table exists
+$table_check = $conn->query("SHOW TABLES LIKE 'customer_order'");
+error_log("customer_order table exists: " . ($table_check->num_rows > 0 ? 'YES' : 'NO'));
+
+// Check current orders count
+$current_orders = $conn->query("SELECT COUNT(*) as count FROM customer_order")->fetch_assoc();
+error_log("Current orders in database: " . $current_orders['count']);
+
+// Check database name
+$db_name = $conn->query("SELECT DATABASE()")->fetch_row()[0];
+error_log("Database name: " . $db_name);
+
+// Create tables if they don't exist
+$create_tables_sql = [
+    "CREATE TABLE IF NOT EXISTS customer_order (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        customer_name VARCHAR(255) NOT NULL,
+        order_type VARCHAR(50) NOT NULL,
+        payment_type VARCHAR(50) NOT NULL,
+        special_instructions TEXT,
+        subtotal DECIMAL(10,2) NOT NULL,
+        service_fee DECIMAL(10,2) NOT NULL,
+        total DECIMAL(10,2) NOT NULL,
+        status VARCHAR(50) DEFAULT 'pending',
+        order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )",
+    
+    "CREATE TABLE IF NOT EXISTS customer_order_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        order_id INT,
+        food_id INT,
+        food_name VARCHAR(255) NOT NULL,
+        quantity INT NOT NULL,
+        price DECIMAL(10,2) NOT NULL,
+        FOREIGN KEY (order_id) REFERENCES customer_order(id) ON DELETE CASCADE
+    )"
+];
+
+foreach ($create_tables_sql as $sql) {
+    if (!$conn->query($sql)) {
+        error_log("Table creation failed: " . $conn->error);
+    } else {
+        error_log("Table created/verified successfully");
+    }
+}
 
 // Calculate totals
 $subtotal = 0;

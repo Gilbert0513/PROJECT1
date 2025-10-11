@@ -95,30 +95,7 @@ if (!empty($_SESSION['user'])) {
     <h1>🍖 Foodhouse Smart Ordering System</h1>
   </nav>
 
-  <!-- Platform Introduction -->
-  <div class="platform-intro">
-    <h2>Multi-Platform Food Ordering System</h2>
-    <p>Access our system seamlessly on any device - desktop, tablet, or mobile</p>
-    
-    <div class="platform-features">
-      <div class="feature-card">
-        <div style="font-size: 3rem;">💻</div>
-        <h3>Web Platform</h3>
-        <p>Full-featured access through any web browser</p>
-      </div>
-      <div class="feature-card">
-        <div style="font-size: 3rem;">📱</div>
-        <h3>Mobile Responsive</h3>
-        <p>Optimized experience on all mobile devices</p>
-      </div>
-      <div class="feature-card">
-        <div style="font-size: 3rem;">🔄</div>
-        <h3>Real-time Sync</h3>
-        <p>Instant updates across all platforms</p>
-      </div>
-    </div>
-  </div>
-
+ 
   <!-- Authentication Container -->
   <div class="auth-container">
     
@@ -162,19 +139,7 @@ if (!empty($_SESSION['user'])) {
     </div>
   </div>
 
-  <!-- Mobile App Section -->
-  <div class="app-download">
-    <h3>📱 Mobile App Coming Soon!</h3>
-    <p>Native iOS and Android apps for enhanced mobile experience</p>
-    <div class="download-buttons">
-      <button class="btn-app" style="background: #000; color: white; padding: 12px 24px; border: none; border-radius: 8px;">
-        🍎 App Store (Soon)
-      </button>
-      <button class="btn-app" style="background: #0F9D58; color: white; padding: 12px 24px; border: none; border-radius: 8px;">
-        🤖 Play Store (Soon)
-      </button>
-    </div>
-  </div>
+ 
 
   <footer>
     <p>© <?=date('Y')?> Foodhouse Smart Ordering & Inventory Management System</p>
