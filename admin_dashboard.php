@@ -201,7 +201,7 @@ if (isset($_GET['update_status'])) {
   <h1><span style="color:#d87b3e;">Admin</span> Dashboard</h1>
   <div class="dashboard-controls">
     <span class="current-month">📅 <?= date('F Y') ?></span>
-    <span class="debug-badge">Total Orders: <?= $total_orders['count'] ?></span>
+ 
     <a href="auth.php?action=logout" class="btn btn-logout">Logout</a>
   </div>
 </nav>
