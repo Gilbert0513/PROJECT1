@@ -1,5 +1,4 @@
-[file name]: user_home.php
-[file content begin]
+
 <?php
 session_start();
 require_once 'db.php';
@@ -543,4 +542,3 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
-[file content end]

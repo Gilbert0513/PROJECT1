@@ -1,3 +1,4 @@
+
 <?php
 session_start();
 require_once 'db.php';
@@ -321,6 +322,64 @@ if ($receipt_data && isset($_GET['success'])) {
       background: none;
       border: none;
     }
+    
+    /* GCash QR Code Styles */
+    .gcash-qr-section {
+      display: none;
+      background: #f8f9fa;
+      border: 2px solid #0070ba;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 15px 0;
+      text-align: center;
+    }
+    .gcash-qr-title {
+      color: #0070ba;
+      font-weight: 600;
+      margin-bottom: 15px;
+      font-size: 1.2rem;
+    }
+    .gcash-qr-code {
+      width: 200px;
+      height: 200px;
+      margin: 0 auto 15px;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+    .gcash-qr-code img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .gcash-instructions {
+      text-align: left;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+      font-size: 0.9rem;
+    }
+    .gcash-instructions ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .gcash-instructions li {
+      margin-bottom: 8px;
+    }
+    .gcash-amount {
+      font-size: 1.3rem;
+      font-weight: bold;
+      color: #0070ba;
+      margin: 10px 0;
+    }
+    .gcash-note {
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 10px;
+    }
+    
     @media print {
       body * {
         visibility: hidden;
@@ -399,11 +458,42 @@ if ($receipt_data && isset($_GET['success'])) {
             
             <div class="form-group">
               <label for="payment_type">Payment Method</label>
-              <select id="payment_type" name="payment_type" required>
+              <select id="payment_type" name="payment_type" required onchange="toggleGCashQR()">
                 <option value="Cash">Cash</option>
                 <option value="GCash">GCash</option>
                 <option value="Credit Card">Credit Card</option>
               </select>
+            </div>
+            
+            <!-- GCash QR Code Section -->
+            <div id="gcashQR" class="gcash-qr-section">
+              <div class="gcash-qr-title">
+                💙 GCash Payment
+              </div>
+              <div class="gcash-amount">
+                Amount to Pay: ₱<?=number_format($total, 2)?>
+              </div>
+              <div class="gcash-qr-code">
+                <!-- Dummy QR Code - Replace with actual QR code generator or image -->
+                <div style="width:100%;height:100%;background:linear-gradient(45deg,#0070ba 25%,transparent 25%,transparent 75%,#0070ba 75%),linear-gradient(45deg,#0070ba 25%,transparent 25%,transparent 75%,#0070ba 75%);background-size:20px 20px;background-position:0 0,10px 10px;display:flex;align-items:center;justify-content:center;color:#0070ba;font-weight:bold;font-size:14px;">
+                  GCASH QR<br>SCAN TO PAY
+                </div>
+              </div>
+              <div class="gcash-instructions">
+                <p><strong>How to pay via GCash:</strong></p>
+                <ol>
+                  <li>Open your GCash app</li>
+                  <li>Tap "Scan QR"</li>
+                  <li>Scan the QR code above</li>
+                  <li>Enter amount: <strong>₱<?=number_format($total, 2)?></strong></li>
+                  <li>Add note: "Foodhouse Order - <?=$customer_name?>"</li>
+                  <li>Confirm payment</li>
+                  <li>Keep the transaction receipt</li>
+                </ol>
+              </div>
+              <div class="gcash-note">
+                💡 <strong>Note:</strong> Please complete payment within 15 minutes. Show payment confirmation to staff.
+              </div>
             </div>
             
             <div class="form-group">
@@ -490,6 +580,23 @@ if ($receipt_data && isset($_GET['success'])) {
 </div>
 
 <script>
+// Toggle GCash QR Code section
+function toggleGCashQR() {
+    const paymentType = document.getElementById('payment_type').value;
+    const gcashSection = document.getElementById('gcashQR');
+    
+    if (paymentType === 'GCash') {
+        gcashSection.style.display = 'block';
+    } else {
+        gcashSection.style.display = 'none';
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    toggleGCashQR(); // Set initial state
+});
+
 // Handle form submission with AJAX to show receipt popup
 document.getElementById('checkoutForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -505,7 +612,7 @@ document.getElementById('checkoutForm')?.addEventListener('submit', async functi
         
         console.log('Sending order request...');
         
-        const response = await fetch('user_checkout.php', {
+        const response = await fetch('', {  // Use empty string to submit to same page
             method: 'POST',
             body: formData
         });
@@ -513,33 +620,46 @@ document.getElementById('checkoutForm')?.addEventListener('submit', async functi
         const responseText = await response.text();
         console.log('Raw response:', responseText);
         
-        let data;
-        try {
-            data = JSON.parse(responseText);
-        } catch (parseError) {
-            console.error('Failed to parse JSON:', parseError);
-            throw new Error('Invalid response from server');
-        }
-        
-        console.log('Parsed data:', data);
-        
-        if (data.success) {
-            console.log('Receipt data structure:', data.receipt);
-            console.log('Items type:', typeof data.receipt.items);
-            console.log('Items value:', data.receipt.items);
+        // Check if response is HTML (error case) or JSON (success case)
+        if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
+            // It's JSON
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Failed to parse JSON:', parseError);
+                throw new Error('Invalid response from server');
+            }
             
-            showReceipt(data.receipt);
+            console.log('Parsed data:', data);
+            
+            if (data.success) {
+                console.log('Receipt data structure:', data.receipt);
+                console.log('Items type:', typeof data.receipt.items);
+                console.log('Items value:', data.receipt.items);
+                
+                showReceipt(data.receipt);
+            } else {
+                console.error('Order failed:', data);
+                alert('Order failed: ' + (data.error || 'Unknown error'));
+                placeOrderBtn.innerHTML = originalText;
+                placeOrderBtn.disabled = false;
+            }
         } else {
-            console.error('Order failed:', data);
-            alert('Order failed: ' + (data.error || 'Unknown error'));
-            placeOrderBtn.innerHTML = originalText;
-            placeOrderBtn.disabled = false;
+            // It's HTML - something went wrong
+            console.error('Server returned HTML instead of JSON');
+            console.log('Response preview:', responseText.substring(0, 200));
+            
+            // Fallback: redirect to same page to trigger normal form submission
+            console.log('Falling back to normal form submission...');
+            this.submit();
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Order failed. Please try again. Check console for details.');
-        placeOrderBtn.innerHTML = originalText;
-        placeOrderBtn.disabled = false;
+        
+        // Fallback: redirect to same page to trigger normal form submission
+        console.log('Falling back to normal form submission due to error...');
+        this.submit();
     }
 });
 
